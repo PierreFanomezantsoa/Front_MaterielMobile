@@ -40,48 +40,71 @@ const StatistiquesScreen = ({ route, navigation }) => {
   };
 
   const processData = (materiels) => {
-    if (!Array.isArray(materiels)) {
-      setChartData([]);
-      setLoading(false);
-      return;
-    }
-
-    // Calcul des totaux
-    const bon = materiels.filter(i => i.etat?.toLowerCase() === 'bon').length;
-    const mauvais = materiels.filter(i => i.etat?.toLowerCase() === 'mauvais').length;
-    const abime = materiels.filter(i => ['abimé', 'abime'].includes(i.etat?.toLowerCase())).length;
-    
-    // Calcul de la quantité totale réelle (somme des colonnes quantité)
-    const totalQty = materiels.reduce((sum, i) => sum + (Number(i.quantite) || 0), 0);
-    setTotalQuantite(totalQty);
-
-    const formattedData = [
-      {
-        name: 'Bon',
-        population: bon,
-        color: '#4CAF50',
-        legendFontColor: '#333',
-        legendFontSize: 14,
-      },
-      {
-        name: 'Mauvais',
-        population: mauvais,
-        color: '#F44336',
-        legendFontColor: '#333',
-        legendFontSize: 14,
-      },
-      {
-        name: 'Abîmé',
-        population: abime,
-        color: '#FF9800',
-        legendFontColor: '#333',
-        legendFontSize: 14,
-      },
-    ];
-
-    setChartData(formattedData);
+  if (!Array.isArray(materiels)) {
+    setChartData([]);
     setLoading(false);
-  };
+    return;
+  }
+
+  // Quantité en bon état
+  const bon = materiels.reduce((sum, item) => {
+    if (item.etat?.toLowerCase() === 'bon') {
+      return sum + (Number(item.quantite) || 0);
+    }
+    return sum;
+  }, 0);
+
+  // Quantité en mauvais état
+  const mauvais = materiels.reduce((sum, item) => {
+    if (item.etat?.toLowerCase() === 'mauvais') {
+      return sum + (Number(item.quantite) || 0);
+    }
+    return sum;
+  }, 0);
+
+  // Quantité abîmée
+  const abime = materiels.reduce((sum, item) => {
+    if (['abimé', 'abime'].includes(item.etat?.toLowerCase())) {
+      return sum + (Number(item.quantite) || 0);
+    }
+    return sum;
+  }, 0);
+
+  // Quantité totale réelle
+  const totalQty = materiels.reduce(
+    (sum, item) => sum + (Number(item.quantite) || 0),
+    0
+  );
+
+  setTotalQuantite(totalQty);
+
+  const formattedData = [
+    {
+      name: 'Bon',
+      population: bon,
+      color: '#4CAF50',
+      legendFontColor: '#333',
+      legendFontSize: 14,
+    },
+    {
+      name: 'Mauvais',
+      population: mauvais,
+      color: '#F44336',
+      legendFontColor: '#333',
+      legendFontSize: 14,
+    },
+    {
+      name: 'Abîmé',
+      population: abime,
+      color: '#FF9800',
+      legendFontColor: '#333',
+      legendFontSize: 14,
+    },
+  ];
+
+  setChartData(formattedData);
+  setLoading(false);
+};
 
   if (loading) {
     return (

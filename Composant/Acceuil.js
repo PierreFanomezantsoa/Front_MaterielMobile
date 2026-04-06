@@ -146,11 +146,38 @@ export default function MaterielScreen({ navigation }) {
   };
 
   // --- Statistiques calculées ---
-  const safeMateriels = Array.isArray(materiels) ? materiels : [];
-  const totalQuantite = safeMateriels.reduce((sum, i) => sum + (Number(i.quantite) || 0), 0);
-  const totalBon = safeMateriels.filter(i => i.etat?.toLowerCase() === 'bon').length;
-  const totalMauvais = safeMateriels.filter(i => i.etat?.toLowerCase() === 'mauvais').length;
-  const totalAbime = safeMateriels.filter(i => ['abimé', 'abime'].includes(i.etat?.toLowerCase())).length;
+ // --- Statistiques calculées ---
+const safeMateriels = Array.isArray(materiels) ? materiels : [];
+
+// Total général de toutes les quantités
+const totalQuantite = safeMateriels.reduce(
+  (sum, item) => sum + (Number(item.quantite) || 0),
+  0
+);
+
+// Quantité des matériels en bon état
+const totalBon = safeMateriels.reduce((sum, item) => {
+  if (item.etat?.toLowerCase() === 'bon') {
+    return sum + (Number(item.quantite) || 0);
+  }
+  return sum;
+}, 0);
+
+// Quantité des matériels en mauvais état
+const totalMauvais = safeMateriels.reduce((sum, item) => {
+  if (item.etat?.toLowerCase() === 'mauvais') {
+    return sum + (Number(item.quantite) || 0);
+  }
+  return sum;
+}, 0);
+
+// Quantité des matériels abîmés
+const totalAbime = safeMateriels.reduce((sum, item) => {
+  if (['abimé', 'abime'].includes(item.etat?.toLowerCase())) {
+    return sum + (Number(item.quantite) || 0);
+  }
+  return sum;
+}, 0);
 
   return (
     <View style={styles.container}>
