@@ -17,7 +17,7 @@ const CARD_COLOR = '#FFFFFF';
 const ERROR_COLOR = '#FF6347'; // Tomato pour les erreurs
 
 // --- CONFIGURATION CLÉ AMÉLIORÉE ---
-const BACKEND_API_URL = "http://192.168.137.118:3000";
+const BACKEND_API_URL = "http://192.168.43.58:3000";
 // ------------------------------------
 
 // Utilitaires - Rendu plus générique

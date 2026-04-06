@@ -1,551 +1,347 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import Toast from 'react-native-toast-message';
 import {
-    TouchableOpacity, StyleSheet, Text, View,
-    Modal, ScrollView, Dimensions, Animated, StatusBar, Platform
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  TextInput,
+  Modal,
+  StyleSheet,
+  ActivityIndicator,
+  ScrollView,
+  Alert,
 } from 'react-native';
-import { FontAwesome, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import axios from 'axios';
 
-// Constantes de design pour une IHM cohérente
-const PRIMARY_COLOR = '#008080'; // Teal (Bleu-vert)
-const SECONDARY_COLOR = '#004D40'; // Teal foncé pour le logo
-const ACCENT_COLOR = '#D32F2F'; // Rouge pour l'annulation
-const BUTTON_PROMO_COLOR = '#085344ff'; // Orange vif pour les promotions
-const BACKGROUND_LIGHT = '#F0F5F5'; // Arrière-plan très clair
-const CARD_BG = '#FFFFFF'; // Fond blanc pour les cartes
-const CARD_BG1 = '#352727ff'; // Fond blanc pour les cartes
+const API_URL = 'http://192.168.43.58:3000/api/materiel';
 
-const { height, width } = Dimensions.get('window');
-const STATUS_BAR_HEIGHT = Platform.OS === 'android' ? StatusBar.currentHeight : 0;
+const PRIMARY_COLOR = '#008080';
+const BACKGROUND_LIGHT = '#F0F5F5';
+const CARD_BG = '#FFFFFF';
+const TEXT_COLOR = '#333';
 
+const axiosInstance = axios.create({
+  baseURL: API_URL,
+  timeout: 5000,
+});
 
-export default function Accueil({ navigation }) {
+export default function MaterielScreen({ navigation }) {
+  const [materiels, setMateriels] = useState([]);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [etatSelectorVisible, setEtatSelectorVisible] = useState(false);
 
-    const [showTables, setShowTables] = useState(false);
-    const pulseAnim = useRef(new Animated.Value(1)).current; // Animation pour l'icône
+  const [form, setForm] = useState({
+    n_materiel: '',
+    design: '',
+    etat: 'bon',
+    quantite: '',
+  });
 
-    // Animation de pulsation légère pour l'icône du centre
-    useEffect(() => {
-        Animated.loop(
-            Animated.sequence([
-                Animated.timing(pulseAnim, {
-                    toValue: 1.05,
-                    duration: 1500,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(pulseAnim, {
-                    toValue: 1,
-                    duration: 1500,
-                    useNativeDriver: true,
-                }),
-            ])
-        ).start();
-    }, [pulseAnim]);
+  const etatOptions = ['bon', 'mauvais', 'abimé'];
 
+  useEffect(() => {
+    fetchMateriels();
+  }, []);
 
-    // ✅ Enregistrer le numéro de table et passer à la page menuList
-    const selectTable = async (tableNumber) => {
-        try {
-            await AsyncStorage.setItem('TABLE_ID', tableNumber.toString());
-            console.log("Table enregistrée :", tableNumber);
+  const fetchMateriels = async () => {
+    try {
+      setLoading(true);
+      const res = await axiosInstance.get('');
+      setMateriels(res.data.data || []);
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Erreur',
+        text2: 'Impossible de récupérer les données.',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
-            setShowTables(false);
-            navigation.navigate('menuList', { tableNumber }); 
-        } catch (error) {
-            console.log("Erreur stockage table :", error);
-        }
-    };
+  const validateForm = () => {
+    if (!form.n_materiel.trim()) return showToastError('Numéro matériel requis');
+    if (!form.design.trim()) return showToastError('Désignation requise');
+    if (!form.quantite.trim() || isNaN(Number(form.quantite))) return showToastError('Quantité invalide');
+    return true;
+  };
 
-    const TABLE_COUNT = 15; // Nombre de tables
-    const tables = [...Array(TABLE_COUNT).keys()].map(i => i + 1);
+  const showToastError = (msg) => {
+    Toast.show({ type: 'error', text1: 'Validation', text2: msg });
+    return false;
+  };
 
-    return (
-        <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor={PRIMARY_COLOR} />
+  const handleSave = async () => {
+    if (!validateForm()) return;
 
-            {/* Zone de tête stylisée et semi-circulaire */}
-            {/* Utilisation de LinearGradient pour un header plus riche */}
-            <LinearGradient
-                colors={[PRIMARY_COLOR, SECONDARY_COLOR]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.headerBlock}
-            >
-                {/* Décoration d'arrière-plan */}
-                <View style={styles.headerDecoration1} />
-                <View style={styles.headerDecoration2} />
-                
-                {/* Boutons de navigation/Fonctions rapides */}
-                <View style={styles.headerNav}>
-                    {/* Bouton Publications (pour voir les offres) */}
-                    <TouchableOpacity
-                        style={styles.navButton}
-                        onPress={() => navigation.navigate("Publications")}
-                    >
-                        <FontAwesome name="bullhorn" size={22} color="#fff" />
-                    </TouchableOpacity>
+    try {
+      setLoading(true);
+      const payload = { ...form, quantite: Number(form.quantite) };
+      let response;
 
-                    {/* Titre central */}
-                    <Text style={styles.headerTitle}>Accueil Client</Text>
+      if (editingItem) {
+        response = await axiosInstance.patch(`/${editingItem.id}`, payload);
+      } else {
+        response = await axiosInstance.post('', payload);
+      }
 
-                    {/* Bouton Admin (engrenage) */}
-                    {/* Mondifier ici pour mettre clique si lancer dans page web cette application */}
-                    <TouchableOpacity
-                        style={styles.navButton}
-                        onPress={() => navigation.navigate("admin")}
-                    >
-                        <Ionicons name="log-in-outline" size={22} color="#fff" />
-                    </TouchableOpacity>
-                </View>
+      Toast.show({
+        type: 'success',
+        text1: 'Succès',
+        text2: response.data.message || 'Opération réussie',
+      });
 
-            </LinearGradient>
+      setModalVisible(false);
+      setEditingItem(null);
+      setForm({ n_materiel: '', design: '', etat: 'bon', quantite: '' });
+      fetchMateriels();
+    } catch (error) {
+      const errorMsg = error.response?.data?.message || 'Erreur lors de la sauvegarde';
+      Toast.show({ type: 'error', text1: 'Erreur', text2: errorMsg });
+    } finally {
+      setLoading(false);
+    }
+  };
 
-            {/* Contenu principal */}
-            <View style={styles.mainContent}>
+  const handleDelete = async (id) => {
+    Alert.alert('Confirmation', 'Supprimer ce matériel ?', [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Supprimer',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            setDeleting(true);
+            const response = await axiosInstance.delete(`/${id}`);
+            Toast.show({
+              type: 'success',
+              text1: 'Supprimé',
+              text2: response.data.message || 'Supprimé avec succès',
+            });
+            fetchMateriels();
+          } catch (error) {
+            Toast.show({ type: 'error', text1: 'Erreur', text2: 'Erreur suppression' });
+          } finally {
+            setDeleting(false);
+          }
+        },
+      },
+    ]);
+  };
 
-                {/* Logo/Illustration Centrée avec animation */}
-                <View style={styles.illustrationContainer}>
-                    <Animated.View style={[styles.iconCircle, { transform: [{ scale: pulseAnim }] }]}>
-                        <MaterialCommunityIcons name="silverware-fork-knife" size={70} color={BACKGROUND_LIGHT} />
-                    </Animated.View>
-                    <Text style={styles.logoText}>Grande Hotel</Text>
-                    <Text style={styles.logoSubtext}>Restaurant</Text>
-                </View>
+  const openEdit = (item) => {
+    setEditingItem(item);
+    setForm({
+      n_materiel: item.n_materiel,
+      design: item.design,
+      etat: item.etat,
+      quantite: item.quantite.toString(),
+    });
+    setModalVisible(true);
+  };
 
-                {/* Carte de Bienvenue */}
-                <View style={styles.welcomeCard}>
-                    <Text style={styles.mainText}>
-                        Bienvenue dans votre{'\n'}
-                        <Text style={styles.highlightText}>Menu Numérique</Text>
-                    </Text>
-                    <View style={styles.divider} />
-                    <Text style={styles.subtitleText}>
-                        Passez votre commande facilement et profitez d'un service rapide et personnalisé.
-                    </Text>
+  // --- Statistiques calculées ---
+  const safeMateriels = Array.isArray(materiels) ? materiels : [];
+  const totalQuantite = safeMateriels.reduce((sum, i) => sum + (Number(i.quantite) || 0), 0);
+  const totalBon = safeMateriels.filter(i => i.etat?.toLowerCase() === 'bon').length;
+  const totalMauvais = safeMateriels.filter(i => i.etat?.toLowerCase() === 'mauvais').length;
+  const totalAbime = safeMateriels.filter(i => ['abimé', 'abime'].includes(i.etat?.toLowerCase())).length;
 
-                    {/* Fonctionnalités rapides */}
-                    <View style={styles.featuresContainer}>
-                        <View style={styles.featureItem}>
-                            <Ionicons name="fast-food-outline" size={24} color={BUTTON_PROMO_COLOR} />
-                            <Text style={styles.featureText}>Menu complet</Text>
-                        </View>
-                        <View style={styles.featureItem}>
-                            <Ionicons name="time-outline" size={24} color={PRIMARY_COLOR} />
-                            <Text style={styles.featureText}>Service rapide</Text>
-                        </View>
-                        <View style={styles.featureItem}>
-                            <Ionicons name="card-outline" size={24} color={SECONDARY_COLOR} />
-                            <Text style={styles.featureText}>Paiement facile</Text>
-                        </View>
-                    </View>
-                </View>
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerDecoration} />
+        <Text style={styles.headerTitle}>Gestion du Matériel</Text>
+        <Text style={styles.headerSubtitle}>Inventaire & Suivi</Text>
+      </View>
 
-            </View>
+      {/* Bouton Ajouter */}
+      <TouchableOpacity 
+        style={[styles.addButton, (deleting || loading) && {opacity:0.5}]} 
+        onPress={() => {
+            setEditingItem(null);
+            setForm({ n_materiel: '', design: '', etat: 'bon', quantite: '' });
+            setModalVisible(true);
+        }} 
+        disabled={deleting || loading}
+      >
+        <Ionicons name="add-circle" size={24} color="white" style={{marginRight: 8}} />
+        <Text style={styles.addText}>Ajouter un matériel</Text>
+      </TouchableOpacity>
 
-            {/* Bas de page : Barre d'action */}
-            <View style={styles.bottomBar}>
-                <TouchableOpacity
-                    style={styles.startButton}
-                    onPress={() => setShowTables(true)}
-                    activeOpacity={0.85}
-                >
-                    <Text style={styles.startButtonText}>Commencer la Commande</Text>
-                    <View style={styles.buttonIconContainer}>
-                        <Ionicons name="arrow-forward" size={24} color="white" />
-                    </View>
-                </TouchableOpacity>
-
-                <Text style={styles.projectTitle}>Projet - Restaurant Numérique</Text>
-            </View>
-
-            {/* MODAL - Choix de la table (Amélioré) */}
-            <Modal visible={showTables} transparent animationType="slide" onRequestClose={() => setShowTables(false)}>
-                <View style={styles.modalBackground}>
-                    <View style={styles.modalBox}>
-                        {/* En-tête modal */}
-                        <View style={styles.modalHeader}>
-                            <View style={styles.modalIconContainer}>
-                                <MaterialCommunityIcons name="table-chair" size={40} color={PRIMARY_COLOR} />
-                            </View>
-                            <Text style={styles.modalTitle}>Sélectionnez votre table</Text>
-                            <Text style={styles.modalSubtitle}>
-                                Choisissez le numéro de votre table pour continuer votre commande
-                            </Text>
-                        </View>
-
-                        {/* Grille des tables */}
-                        <ScrollView 
-                            contentContainerStyle={styles.tablesGrid}
-                            showsVerticalScrollIndicator={false}
-                        >
-                            {tables.map((number) => (
-                                <TouchableOpacity
-                                    key={number}
-                                    style={styles.tableBtn}
-                                    onPress={() => selectTable(number)}
-                                    activeOpacity={0.8}
-                                >
-                                    <View style={styles.tableBtnInner}>
-                                        <Ionicons name="restaurant-outline" size={22} color={PRIMARY_COLOR} />
-                                        <Text style={styles.tableText}>Table</Text>
-                                        <Text style={styles.tableNumber}>{number}</Text>
-                                    </View>
-                                </TouchableOpacity>
-                            ))}
-                        </ScrollView>
-
-                        {/* Bouton Annuler */}
-                        <TouchableOpacity
-                            style={styles.closeBtn}
-                            onPress={() => setShowTables(false)}
-                            activeOpacity={0.7}
-                        >
-                            <Ionicons name="close-circle-outline" size={20} color={ACCENT_COLOR} />
-                            <Text style={styles.closeBtnText}>Annuler</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
-
+      {/* Liste ou Loading */}
+      {loading && safeMateriels.length === 0 ? (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={PRIMARY_COLOR} />
         </View>
-    );
+      ) : (
+        <FlatList
+          data={safeMateriels}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={styles.listContent}
+          renderItem={({ item }) => (
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
+                <View style={{flex:1}}>
+                  <Text style={styles.cardTitle}>{item.design}</Text>
+                  <Text style={styles.cardSubtitle}>Ref: {item.n_materiel}</Text>
+                </View>
+                <View style={[styles.etatBadge, { backgroundColor: item.etat?.toLowerCase() === 'bon' ? '#4CAF50' : item.etat?.toLowerCase() === 'mauvais' ? '#F44336' : '#FF9800' }]}>
+                  <Text style={styles.etatText}>{item.etat?.toUpperCase()}</Text>
+                </View>
+              </View>
+              <View style={styles.cardDivider} />
+              <View style={styles.cardFooter}>
+                <View style={styles.quantityBox}>
+                  <Text style={styles.quantityLabel}>Quantité</Text>
+                  <Text style={styles.quantityValue}>{item.quantite}</Text>
+                </View>
+                <View style={styles.actionButtons}>
+                  <TouchableOpacity onPress={() => openEdit(item)} style={styles.editBtn}>
+                    <Ionicons name="create-outline" size={22} color="#1976D2" />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteBtn}>
+                    <Ionicons name="trash-outline" size={22} color="#D32F2F" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          )}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="archive-outline" size={80} color="#ccc" />
+              <Text style={styles.emptyText}>Aucun matériel trouvé</Text>
+            </View>
+          }
+        />
+      )}
+
+      {/* BARRE DE STATISTIQUES MISE À JOUR */}
+      <View style={styles.bottomBar}>
+        <View style={styles.statsRow}>
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{totalQuantite}</Text>
+            <Text style={styles.statLabel}>Total</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, {color:'#4CAF50'}]}>{totalBon}</Text>
+            <Text style={styles.statLabel}>Bon</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, {color:'#F44336'}]}>{totalMauvais}</Text>
+            <Text style={styles.statLabel}>Mauvais</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, {color:'#FF9800'}]}>{totalAbime}</Text>
+            <Text style={styles.statLabel}>Abîmé</Text>
+          </View>
+        </View>
+        <TouchableOpacity 
+          style={styles.statsNavigationButton} 
+          onPress={() => navigation.navigate('statistiques', { data: safeMateriels })}
+        >
+          <Ionicons name="pie-chart" size={20} color="white" />
+          <Text style={styles.statsNavText}>Voir Graphiques</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Modal Formulaire */}
+      <Modal visible={modalVisible} animationType="slide" onRequestClose={() => setModalVisible(false)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <Ionicons name="close" size={30} color="white" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>{editingItem ? 'Modifier' : 'Ajouter'}</Text>
+            <View style={{ width: 30 }} />
+          </View>
+          <ScrollView style={styles.modalBody}>
+            <Text style={styles.inputLabel}>Numéro matériel</Text>
+            <TextInput style={styles.input} value={form.n_materiel} onChangeText={(t) => setForm({ ...form, n_materiel: t })} placeholder="Ex: MAT-001" />
+            <Text style={styles.inputLabel}>Désignation</Text>
+            <TextInput style={styles.input} value={form.design} onChangeText={(t) => setForm({ ...form, design: t })} placeholder="Nom du matériel" />
+            <Text style={styles.inputLabel}>État</Text>
+            <TouchableOpacity style={styles.input} onPress={() => setEtatSelectorVisible(true)}>
+              <Text style={{ color: TEXT_COLOR }}>{form.etat.toUpperCase()}</Text>
+            </TouchableOpacity>
+            <Text style={styles.inputLabel}>Quantité</Text>
+            <TextInput style={styles.input} value={form.quantite} onChangeText={(t) => setForm({ ...form, quantite: t })} keyboardType="numeric" placeholder="0" />
+            <TouchableOpacity style={[styles.saveButton, loading && {opacity:0.7}]} onPress={handleSave} disabled={loading}>
+              {loading ? <ActivityIndicator color="white" /> : <Text style={styles.saveText}>ENREGISTRER</Text>}
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Sélecteur d'état */}
+      <Modal transparent visible={etatSelectorVisible} animationType="fade">
+        <TouchableOpacity style={styles.etatModalOverlay} onPress={() => setEtatSelectorVisible(false)}>
+          <View style={styles.etatModal}>
+            {etatOptions.map(opt => (
+              <TouchableOpacity key={opt} style={styles.etatOption} onPress={() => { setForm({ ...form, etat: opt }); setEtatSelectorVisible(false); }}>
+                <Text style={styles.etatOptionText}>{opt.toUpperCase()}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      <Toast />
+    </View>
+  );
 }
 
-/* ------------------------------------------
-            STYLES ERGONOMIQUES
-------------------------------------------- */
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: BACKGROUND_LIGHT,
-    },
-    
-    // --- Haut de page décoratif ---
-    headerBlock: {
-        position: 'absolute',
-        top: 0,
-        width: '100%',
-        height: height * 0.40,
-        paddingTop: STATUS_BAR_HEIGHT + 10, // Ajout de l'espace pour la barre d'état
-        borderBottomLeftRadius: 60,
-        borderBottomRightRadius: 60,
-        elevation: 8,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.25,
-        shadowRadius: 10,
-        overflow: 'hidden',
-    },
-    headerNav: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-    },
-    headerTitle: {
-        color: 'white',
-        fontSize: 18,
-        fontWeight: '700',
-    },
-    navButton: {
-        padding: 10,
-        borderRadius: 20,
-        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    },
-    headerDecoration1: {
-        position: 'absolute',
-        top: -50,
-        right: -50,
-        width: 200,
-        height: 200,
-        borderRadius: 100,
-        backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    },
-    headerDecoration2: {
-        position: 'absolute',
-        bottom: -30,
-        left: -30,
-        width: 150,
-        height: 150,
-        borderRadius: 75,
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    },
-    
-    // --- Contenu Principal ---
-    mainContent: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'flex-start',
-        paddingTop: height * 0.08,
-        paddingHorizontal: 20
-    },
-    
-    // --- Logo/Illustration ---
-    illustrationContainer: {
-        marginBottom: 30,
-        alignItems: 'center',
-        justifyContent: 'center',
-        // Remonte le logo au-dessus du bloc de bienvenue
-        marginTop: STATUS_BAR_HEIGHT + 30, 
-    },
-    iconCircle: {
-        width: 150,
-        height: 150,
-        borderRadius: 75,
-        backgroundColor: SECONDARY_COLOR,
-        alignItems: 'center',
-        justifyContent: 'center',
-        elevation: 15, 
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
-        borderWidth: 5,
-        borderColor: 'rgba(255, 255, 255, 0.3)',
-        marginBottom: 15,
-    },
-    logoText: {
-        color: CARD_BG1,
-        fontSize: 28,
-        marginTop: 15,
-        fontWeight: '900',
-        letterSpacing: 1,
-    },
-    logoSubtext: {
-        color: 'rgba(255, 255, 255, 0.9)',
-        fontSize: 14,
-        fontWeight: '500',
-        marginTop: 2,
-    },
-
-    // --- Carte de Bienvenue ---
-    welcomeCard: {
-        backgroundColor: CARD_BG,
-        borderRadius: 25,
-        padding: 25,
-        width: '100%',
-        elevation: 5,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.15,
-        shadowRadius: 8,
-        marginTop: 20,
-    },
-    mainText: {
-        fontSize: 24,
-        fontWeight: '700', 
-        color: '#333',
-        textAlign: 'center',
-        lineHeight: 32,
-    },
-    highlightText: {
-        fontWeight: '900',
-        color: PRIMARY_COLOR,
-    },
-    divider: {
-        height: 3,
-        width: 60,
-        backgroundColor: PRIMARY_COLOR,
-        alignSelf: 'center',
-        marginVertical: 15,
-        borderRadius: 2,
-    },
-    subtitleText: {
-        fontSize: 15,
-        color: '#666',
-        textAlign: 'center',
-        lineHeight: 22,
-        marginBottom: 20,
-    },
-
-    // --- Fonctionnalités ---
-    featuresContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        paddingTop: 15,
-        borderTopWidth: 1,
-        borderTopColor: '#E0E0E0',
-    },
-    featureItem: {
-        alignItems: 'center',
-        flex: 1,
-    },
-    featureText: {
-        fontSize: 11,
-        color: '#666',
-        marginTop: 6,
-        textAlign: 'center',
-        fontWeight: '600',
-    },
-
-    // --- Barre d'Action (Bottom Bar) ---
-    bottomBar: {
-        backgroundColor: CARD_BG,
-        paddingHorizontal: 20,
-        paddingTop: 20,
-        paddingBottom: Platform.OS === 'ios' ? 30 : 20,
-        alignItems: 'center',
-        borderTopLeftRadius: 30,
-        borderTopRightRadius: 30,
-        elevation: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -5 },
-        shadowOpacity: 0.1,
-        shadowRadius: 15,
-    },
-    startButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: BUTTON_PROMO_COLOR, // Changement pour plus de contraste/urgence
-        paddingHorizontal: 30,
-        paddingVertical: 18,
-        borderRadius: 30,
-        width: '100%',
-        elevation: 8,
-        shadowColor: BUTTON_PROMO_COLOR,
-        shadowOffset: { width: 0, height: 5 },
-        shadowOpacity: 0.6, // Augmentation de l'ombre
-        shadowRadius: 10,
-    },
-    startButtonText: {
-        color: '#FFF',
-        fontSize: 18,
-        fontWeight: '800',
-        flex: 1,
-        textAlign: 'center',
-    },
-    buttonIconContainer: {
-        position: 'absolute',
-        right: 20,
-        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-        borderRadius: 20,
-        padding: 6,
-    },
-    projectTitle: {
-        fontSize: 12,
-        color: '#999',
-        fontWeight: '500',
-        marginTop: 15,
-        textAlign: 'center',
-    },
-
-    // --- MODAL Styles ---
-    modalBackground: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.75)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
-    },
-    modalBox: {
-        width: '100%',
-        maxWidth: 450,
-        maxHeight: '90%',
-        backgroundColor: CARD_BG,
-        borderRadius: 30,
-        paddingBottom: 25,
-        elevation: 30,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.3,
-        shadowRadius: 20,
-    },
-    modalHeader: {
-        alignItems: 'center',
-        paddingTop: 30,
-        paddingHorizontal: 25,
-        paddingBottom: 20,
-    },
-    modalIconContainer: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        backgroundColor: `${PRIMARY_COLOR}15`,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 15,
-    },
-    modalTitle: {
-        fontSize: 24,
-        fontWeight: '800',
-        color: SECONDARY_COLOR,
-        marginBottom: 10,
-        textAlign: 'center',
-    },
-    modalSubtitle: {
-        fontSize: 14,
-        color: '#777',
-        textAlign: 'center',
-        lineHeight: 20,
-    },
-    
-    // --- Grille des Tables ---
-    tablesGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'center',
-        paddingHorizontal: 15,
-        paddingVertical: 20,
-    },
-    tableBtn: {
-        width: (width - 120) / 3, // 3 colonnes avec espacement
-        aspectRatio: 1,
-        margin: 6,
-        borderRadius: 20,
-        overflow: 'hidden',
-        elevation: 4,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 5,
-    },
-    tableBtnInner: {
-        flex: 1,
-        backgroundColor: CARD_BG,
-        borderWidth: 2,
-        borderColor: PRIMARY_COLOR,
-        borderRadius: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 10,
-    },
-    tableText: {
-        color: '#666',
-        fontSize: 11,
-        fontWeight: '600',
-        marginTop: 6,
-    },
-    tableNumber: {
-        color: PRIMARY_COLOR,
-        fontSize: 28,
-        fontWeight: '900',
-        marginTop: 2,
-    },
-    
-    // --- Bouton Annuler ---
-    closeBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 12,
-        paddingHorizontal: 30,
-        marginHorizontal: 25,
-        marginTop: 10,
-        borderRadius: 15,
-        backgroundColor: `${ACCENT_COLOR}10`,
-    },
-    closeBtnText: {
-        color: ACCENT_COLOR,
-        fontSize: 16,
-        fontWeight: '700',
-        marginLeft: 8,
-    },
-
-    // --- Anciens styles non utilisés mais laissés pour référence ---
-    bottomBtn: { display: 'none' },
-    activeIndicator: { display: 'none' },
-    bottomText: { display: 'none' },
-    activeText: { display: 'none' },
+  container: { flex: 1, backgroundColor: BACKGROUND_LIGHT },
+  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  header: { backgroundColor: PRIMARY_COLOR, paddingTop: 50, paddingBottom: 25, paddingHorizontal: 20, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, elevation: 5 },
+  headerDecoration: { position: 'absolute', top: -50, right: -20, width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(255,255,255,0.1)' },
+  headerTitle: { color: 'white', fontSize: 24, fontWeight: 'bold' },
+  headerSubtitle: { color: 'rgba(255,255,255,0.8)', fontSize: 14 },
+  addButton: { backgroundColor: PRIMARY_COLOR, margin: 16, padding: 15, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', elevation: 3 },
+  addText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
+  listContent: { paddingHorizontal: 16, paddingBottom: 180 },
+  card: { backgroundColor: CARD_BG, borderRadius: 15, padding: 16, marginBottom: 15, elevation: 2, borderLeftWidth: 5, borderLeftColor: PRIMARY_COLOR },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between' },
+  cardTitle: { fontSize: 18, fontWeight: 'bold', color: TEXT_COLOR },
+  cardSubtitle: { fontSize: 13, color: '#777', marginTop: 2 },
+  etatBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  etatText: { color: 'white', fontSize: 10, fontWeight: 'bold' },
+  cardDivider: { height: 1, backgroundColor: '#f0f0f0', marginVertical: 12 },
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  quantityBox: { backgroundColor: '#f9f9f9', padding: 8, borderRadius: 8, alignItems: 'center', minWidth: 70 },
+  quantityLabel: { fontSize: 10, color: '#999' },
+  quantityValue: { fontSize: 16, fontWeight: 'bold', color: PRIMARY_COLOR },
+  actionButtons: { flexDirection: 'row', gap: 15 },
+  bottomBar: { position: 'absolute', bottom: 0, width: '100%', backgroundColor: 'white', padding: 15, borderTopLeftRadius: 20, borderTopRightRadius: 20, elevation: 20 },
+  statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 15 },
+  statItem: { alignItems: 'center' },
+  statValue: { fontSize: 18, fontWeight: 'bold', color: TEXT_COLOR },
+  statLabel: { fontSize: 11, color: '#999', marginTop: 2 },
+  statDivider: { width: 1, height: '80%', backgroundColor: '#eee', alignSelf: 'center' },
+  statsNavigationButton: { backgroundColor: PRIMARY_COLOR, padding: 12, borderRadius: 10, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
+  statsNavText: { color: 'white', fontWeight: 'bold', marginLeft: 8 },
+  modalContainer: { flex: 1, backgroundColor: BACKGROUND_LIGHT },
+  modalHeader: { backgroundColor: PRIMARY_COLOR, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 40 },
+  modalTitle: { color: 'white', fontSize: 20, fontWeight: 'bold' },
+  modalBody: { padding: 20 },
+  inputLabel: { fontSize: 14, fontWeight: '600', marginBottom: 8, color: TEXT_COLOR },
+  input: { backgroundColor: 'white', borderWidth: 1, borderColor: '#ddd', padding: 12, borderRadius: 10, marginBottom: 20, fontSize: 16, justifyContent: 'center' },
+  saveButton: { backgroundColor: PRIMARY_COLOR, padding: 18, borderRadius: 12, alignItems: 'center', marginTop: 10 },
+  saveText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
+  etatModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  etatModal: { backgroundColor: 'white', width: '80%', borderRadius: 15, padding: 10 },
+  etatOption: { padding: 15, borderBottomWidth: 1, borderBottomColor: '#eee' },
+  etatOptionText: { textAlign: 'center', fontWeight: 'bold', color: TEXT_COLOR },
+  emptyContainer: { alignItems: 'center', marginTop: 50 },
+  emptyText: { color: '#999', fontSize: 16, marginTop: 10 },
 });
